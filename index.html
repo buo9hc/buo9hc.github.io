@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' http://localhost:8080; base-uri 'none'; form-action 'none'">
+<title>WeighLink C3</title>
+<link rel="stylesheet" href="style.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<header>
+  <h1>WeighLink C3</h1>
+  <p class="states" aria-live="polite">
+    <span class="state" id="s-server"><i></i><span>Server</span> <b>-</b></span>
+    <span class="state" id="s-broker"><i></i><span>Broker</span> <b>-</b></span>
+    <span class="state" id="s-module"><i></i><span>Module</span> <b>-</b></span>
+  </p>
+</header>
+<p id="notice" class="notice" hidden></p>
+<main>
+  <section class="now" aria-label="Latest report">
+    <p class="label" id="now-label">Latest report</p>
+    <p class="weight"><span id="weight">-</span> <span id="unit"></span></p>
+    <p class="flags" id="flags"></p>
+    <p class="meta" id="now-meta">Waiting for the first report. Press the button on the module.</p>
+    <dl class="parts" id="parts"></dl>
+  </section>
+  <section class="history" aria-label="History">
+    <h2 id="chart-title">Weight</h2>
+    <div class="plot" id="plot"></div>
+  </section>
+  <section class="log" aria-label="Reports">
+    <h2>Reports <small id="count"></small></h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Time</th><th>No.</th><th>Event</th><th class="n">Weight</th><th>Unit</th><th>State</th><th>Mode</th><th class="n">Age</th><th>Remarks</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+  </section>
+</main>
+<footer>Reads the MQTT topic <code>home/esp32c3/scale</code>. Shows the last 500 reports since the server was started.</footer>
+</body>
+</html>

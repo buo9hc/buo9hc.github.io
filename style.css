@@ -1,0 +1,58 @@
+:root {
+  color-scheme: light;
+  --page: #f4f4f1; --surface: #fcfcfb; --line: #e3e2dd; --grid: #ecebe6;
+  --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #6f6e69; --series: #2a78d6;
+  --good: #006300; --warn: #8a5300; --bad: #b3261e;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #111110; --surface: #1a1a19; --line: #32322f; --grid: #282826;
+    --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #98978e; --series: #3987e5;
+    --good: #5fc75f; --warn: #e0a64a; --bad: #f08a80;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.45 Arial, Helvetica, sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 6px 24px; align-items: baseline; justify-content: space-between; padding: 18px 24px 10px; border-bottom: 1px solid var(--ink); margin: 0 auto; max-width: 1120px; }
+h1 { font-size: 22px; margin: 0; }
+h2 { font-size: 16px; margin: 0 0 10px; }
+h2 small { font-weight: normal; color: var(--ink-3); font-size: 13px; }
+p { margin: 0; }
+.states { display: flex; flex-wrap: wrap; gap: 4px 18px; color: var(--ink-2); font-size: 13px; }
+.state i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--ink-3); margin-right: 5px; }
+.state b { color: var(--ink); }
+.state.ok i { background: var(--good); border-color: var(--good); }
+.state.no i { border-color: var(--bad); border-radius: 0; }
+.notice { margin: 14px auto 0; max-width: 1072px; padding: 9px 12px; border: 1px solid var(--warn); border-left-width: 5px; background: var(--surface); }
+main { max-width: 1120px; margin: 0 auto; padding: 18px 24px; display: grid; gap: 18px; grid-template-columns: minmax(270px, 2fr) 3fr; }
+section { background: var(--surface); border: 1px solid var(--line); padding: 16px 18px; min-width: 0; }
+.log { grid-column: 1 / -1; }
+.label, .meta { color: var(--ink-2); font-size: 13px; }
+.weight { font-size: 56px; font-weight: bold; line-height: 1.1; margin: 6px 0 4px; overflow-wrap: anywhere; }
+.weight #unit { font-size: 26px; color: var(--ink-2); }
+.weight.error { font-size: 26px; color: var(--bad); }
+.flags { min-height: 1.5em; display: flex; flex-wrap: wrap; gap: 4px 14px; font-weight: bold; }
+.good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); } .plain { color: var(--ink-2); }
+.parts { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
+.parts:empty { display: none; }
+.parts dt { color: var(--ink-2); } .parts dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; white-space: pre-line; }
+.plot { position: relative; height: 260px; }
+.plot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.plot svg:focus-visible { outline: 2px solid var(--series); outline-offset: 4px; }
+.plot text { fill: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.plot text.last { fill: var(--ink); font-weight: bold; }
+.grid { stroke: var(--grid); stroke-width: 1; } .base { stroke: var(--line); stroke-width: 1; } .cross { stroke: var(--ink-3); stroke-width: 1; }
+.path { fill: none; stroke: var(--series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.dot { fill: var(--series); stroke: var(--surface); stroke-width: 2; }
+.empty { color: var(--ink-3); padding-top: 90px; text-align: center; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 2px 8px rgb(0 0 0 / .14); padding: 6px 9px; font-size: 12px; color: var(--ink-2); white-space: nowrap; z-index: 1; }
+.tip b { display: block; color: var(--ink); font-size: 14px; }
+.scroll { overflow-x: auto; max-height: 460px; overflow-y: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 4px 10px 4px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--surface); }
+th.n, td.n { text-align: right; padding-right: 14px; }
+td:last-child { white-space: normal; min-width: 150px; color: var(--ink-2); }
+footer { max-width: 1120px; margin: 0 auto; padding: 0 24px 28px; color: var(--ink-3); font-size: 12px; }
+@media (max-width: 760px) { main { grid-template-columns: minmax(0, 1fr); padding: 14px 16px; } header { padding: 14px 16px 10px; } .weight { font-size: 44px; } .notice { margin: 12px 16px 0; } footer { padding: 0 16px 24px; } }

@@ -1,0 +1,184 @@
+[
+{
+"event": "button",
+"seq": 21,
+"weight": 1.234,
+"unit": "kg",
+"stable": true,
+"age_ms": 327,
+"shown": "1.234"
+},
+{
+"event": "button",
+"seq": 22,
+"weight": 0.998,
+"unit": "kg",
+"stable": false,
+"age_ms": 344,
+"shown": "0.998"
+},
+{
+"event": "button",
+"seq": 23,
+"weight": 11.11,
+"unit": "kg",
+"stable": true,
+"type": "N",
+"gross": {
+"weight": 12.34,
+"unit": "kg"
+},
+"net": {
+"weight": 11.11,
+"unit": "kg"
+},
+"tare": {
+"weight": 1.23,
+"unit": "kg"
+},
+"mode": "WEIGH",
+"age_ms": 361,
+"shown": "11.110"
+},
+{
+"event": "button",
+"seq": 24,
+"weight": 102.83,
+"unit": "%",
+"stable": true,
+"mode": "PERCNT",
+"info": {
+"ref_wgt": "12.000 kg"
+},
+"age_ms": 378,
+"shown": "102.83"
+},
+{
+"event": "button",
+"seq": 25,
+"weight": 242,
+"unit": "PCS",
+"stable": true,
+"mode": "COUNT",
+"info": {
+"apw": "5 g"
+},
+"age_ms": 395,
+"shown": "242"
+},
+{
+"event": "button",
+"seq": 26,
+"weight": 1.5,
+"unit": "kg",
+"stable": true,
+"status": "Accept",
+"mode": "CHECKWEIGH",
+"info": {
+"under": "1.000 kg",
+"over": "2.000 kg"
+},
+"age_ms": 412,
+"shown": "1.500"
+},
+{
+"event": "button",
+"seq": 26,
+"error": "no recent reading"
+},
+{
+"event": "button",
+"seq": 27,
+"weight": 2.0,
+"unit": "kg",
+"stable": true,
+"mode": "DYNAMIC",
+"info": {
+"level": 2
+},
+"age_ms": 429,
+"shown": "2.000"
+},
+{
+"event": "button",
+"seq": 30,
+"weight": 0.65,
+"unit": "kg",
+"stable": true,
+"text": "Lot 7",
+"age_ms": 480,
+"shown": "0.650"
+},
+{
+"event": "button",
+"seq": 29,
+"weight": "2:3.28",
+"unit": "lb:oz",
+"stable": true,
+"age_ms": 463,
+"shown": "2:3.28"
+},
+{
+"event": "button",
+"seq": 40,
+"weight": 0.0,
+"shown": "0.000",
+"unit": "kg",
+"stable": true,
+"age_ms": 300
+},
+{
+"event": "button",
+"seq": 41,
+"weight": 1.234,
+"shown": "1.234",
+"unit": "kg",
+"stable": true,
+"age_ms": 341
+},
+{
+"event": "button",
+"seq": 42,
+"weight": 1.234,
+"shown": "1.234",
+"unit": "kg",
+"stable": true,
+"age_ms": 382
+},
+{
+"event": "button",
+"seq": 43,
+"weight": 2.5,
+"shown": "2.500",
+"unit": "kg",
+"stable": true,
+"age_ms": 423
+},
+{
+"event": "button",
+"seq": 44,
+"weight": 0.65,
+"shown": "0.650",
+"unit": "kg",
+"stable": true,
+"age_ms": 464
+},
+{
+"event": "button",
+"seq": 45,
+"weight": 11.11,
+"shown": "11.110",
+"unit": "kg",
+"stable": true,
+"age_ms": 505
+},
+{
+"event": "button",
+"seq": 46,
+"weight": 1.5,
+"shown": "1.500",
+"unit": "kg",
+"stable": true,
+"age_ms": 546
+}
+]
