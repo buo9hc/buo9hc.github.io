@@ -2,10 +2,13 @@
 "use strict";
 
 const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
-const API = LOCAL ? "" : "http://localhost:8080"; // the pages may also be hosted elsewhere
+// The pages may also be hosted elsewhere. Then the app on this computer is read over https, if
+// it has a trusted certificate (web/trust.sh), else over http, which Safari never allows.
+const HELPER = "http://localhost:8080";
+let routes = LOCAL ? [""] : ["https://localhost:8443", "http://localhost:8080"];
 const KEEP = 500, POINTS = 100;
 const $ = (id) => document.getElementById(id);
-const state = { reports: [], last: 0, offset: 0, failures: 0, sample: false, loading: false };
+const state = { reports: [], last: 0, offset: 0, failures: 0, sample: false, helper: 0 };
 
 function el(tag, text, cls) {
   const e = document.createElement(tag);
@@ -71,7 +74,7 @@ async function showUnreachable(waiting) {
   }
   setState("s-live", state.sample ? "Sample data" : "Not live", "warn");
   if (MOBILE) return notice("This is sample data. Live reports are shown only on the computer that runs the app.");
-  if (SAFARI) return notice("This is sample data. Safari does not let this site read the app on your computer. If the app is running here, open the live page directly.", true);
+  if (SAFARI) return notice("This is sample data. If the app is running on this computer, show its live data here through a small helper window, or open the live page directly.", true, true, true);
   if (waiting) return notice("Your browser is asking for permission to access the local network. Allow it to see live reports, or open the live page directly.", true);
   if ((await permission()) === "denied") return notice("This is sample data. The browser blocks this site's access to the local network. Allow it in the site settings, or open the live page directly.", true, true);
   notice("This is sample data. The app is not running on this computer, or the browser blocks access to it. Start it with web/run.sh, then try again or open the live page directly.", true, true);
@@ -253,11 +256,12 @@ function reset() {
   $("rows").replaceChildren();
 }
 
-function notice(text, open, retry) {
+function notice(text, open, retry, helper) {
   $("notice").hidden = !text;
   if ($("notice-text").textContent !== (text || "")) $("notice-text").textContent = text || "";
   $("open").hidden = !open;
   $("retry").hidden = !retry;
+  $("helper").hidden = !helper;
 }
 
 async function showSample() {
@@ -272,41 +276,68 @@ async function showSample() {
   } catch { /* nothing to show */ }
 }
 
+function accept(d) {
+  if (state.sample) { reset(); state.sample = false; $("now-label").textContent = "Latest report"; clearLatest(); drawChart(); }
+  if (d.last < state.last) { reset(); clearLatest(); drawChart(); } // the app was restarted
+  state.failures = 0;
+  state.offset = d.now - Date.now() / 1000;
+  showStatus(d);
+  take(d.reports.filter((r) => r.id > state.last));
+}
+
+// Live data through the helper window, which is a page of the app itself.
+addEventListener("message", (e) => {
+  if (LOCAL || e.origin !== HELPER || !e.data || !e.data.weighlink || !Array.isArray(e.data.weighlink.reports)) return;
+  state.helper = Date.now();
+  accept(e.data.weighlink);
+  showSince();
+  e.source.postMessage({ after: state.last }, HELPER);
+});
+const helped = () => Date.now() - state.helper < 8000;
+
+async function read(route, waiting) {
+  const stop = new AbortController();
+  const asking = setTimeout(waiting, 2500); // a permission prompt is open
+  const limit = setTimeout(() => stop.abort(), LOCAL ? 5000 : 60000);
+  try {
+    const r = await fetch(`${route}/api/reports?after=${state.sample ? 0 : state.last}`, { cache: "no-store", signal: stop.signal });
+    if (!r.ok) throw new Error(String(r.status));
+    return await r.json();
+  } finally {
+    clearTimeout(asking);
+    clearTimeout(limit);
+  }
+}
+
 let timer = null;
 async function poll() {
   clearTimeout(timer);
   timer = null;
-  if (!LOCAL && SAFARI) { // would only be blocked
-    if (!state.reports.length) await showSample();
-    return showUnreachable();
+  let waited = false;
+  const waiting = async () => { waited = true; if (!state.reports.length) await showSample(); if (waited && !helped()) showUnreachable(true); };
+  if (!helped()) {
+    let d = null;
+    for (const route of routes) {
+      if (SAFARI && route.startsWith("http:")) continue; // would only be blocked
+      try { d = await read(route, waiting); routes = [route, ...routes.filter((x) => x !== route)]; break; } catch { /* next one */ }
+    }
+    waited = false;
+    if (helped()) { /* the helper window was faster */ } else if (d) {
+      accept(d);
+    } else {
+      state.failures++;
+      if (!LOCAL && state.failures === 1 && !state.reports.length) await showSample();
+      await showUnreachable();
+    }
   }
-  const stop = new AbortController();
-  const asking = setTimeout(async () => { if (!state.reports.length) await showSample(); showUnreachable(true); }, 2500); // a permission prompt is open
-  const limit = setTimeout(() => stop.abort(), LOCAL ? 5000 : 60000);
-  try {
-    const r = await fetch(`${API}/api/reports?after=${state.sample ? 0 : state.last}`, { cache: "no-store", signal: stop.signal });
-    if (!r.ok) throw new Error(String(r.status));
-    const d = await r.json();
-    if (state.sample) { reset(); state.sample = false; $("now-label").textContent = "Latest report"; clearLatest(); drawChart(); }
-    if (d.last < state.last) { reset(); clearLatest(); drawChart(); } // the app was restarted
-    state.failures = 0;
-    state.offset = d.now - Date.now() / 1000;
-    showStatus(d);
-    take(d.reports);
-  } catch {
-    clearTimeout(asking);
-    state.failures++;
-    if (!LOCAL && state.failures === 1 && !state.reports.length) await showSample();
-    await showUnreachable();
-  } finally {
-    clearTimeout(asking);
-    clearTimeout(limit);
-    showSince();
-    timer = setTimeout(poll, state.failures ? 4000 : 1000);
-  }
+  showSince();
+  timer = setTimeout(poll, state.failures ? 4000 : 1000);
 }
 
 $("retry").addEventListener("click", () => { if (timer) poll(); });
+$("helper").addEventListener("click", () => {
+  if (!open(HELPER + "/bridge", "weighlink", "popup,width=420,height=230")) notice("The browser blocked the helper window. Allow pop-ups for this site, or open the live page directly.", true, true, true);
+});
 addEventListener("resize", () => drawChart());
 drawChart();
 poll();

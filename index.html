@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' http://localhost:8080; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' http://localhost:8080 https://localhost:8443; base-uri 'none'; form-action 'none'">
 <title>WeighLink C3</title>
 <link rel="stylesheet" href="style.css">
 <script src="app.js" defer></script>
@@ -22,7 +22,7 @@
 </header>
 <div id="notice" class="notice" hidden>
   <p id="notice-text"></p>
-  <p class="actions"><a id="open" href="http://localhost:8080/" hidden>Open the live page on this computer</a> <button id="retry" type="button" hidden>Try again</button></p>
+  <p class="actions"><button id="helper" type="button" hidden>Show live data here</button> <a id="open" href="http://localhost:8080/" hidden>Open the live page on this computer</a> <button id="retry" type="button" hidden>Try again</button></p>
 </div>
 <main>
   <section class="now" aria-label="Latest report">

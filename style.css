@@ -33,7 +33,7 @@ p { margin: 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 8px; }
 .actions:not(:has(> :not([hidden]))) { display: none; }
 .actions a, .actions button { font: inherit; font-size: 14px; padding: 5px 12px; border: 1px solid var(--ink-2); background: var(--surface); color: var(--ink); text-decoration: none; cursor: pointer; }
-.actions a { background: var(--ink); color: var(--surface); border-color: var(--ink); font-weight: bold; }
+.actions #helper, #helper[hidden] ~ a { background: var(--ink); color: var(--surface); border-color: var(--ink); font-weight: bold; }
 .actions [hidden] { display: none; }
 .actions a:focus-visible, .actions button:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; }
 main { max-width: 1120px; margin: 0 auto; padding: 18px 24px; display: grid; gap: 18px; grid-template-columns: minmax(270px, 2fr) 3fr; }
