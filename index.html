@@ -11,13 +11,19 @@
 <body>
 <header>
   <h1>WeighLink C3</h1>
-  <p class="states" aria-live="polite">
-    <span class="state" id="s-server"><i></i><span>Server</span> <b>-</b></span>
-    <span class="state" id="s-broker"><i></i><span>Broker</span> <b>-</b></span>
-    <span class="state" id="s-module"><i></i><span>Module</span> <b>-</b></span>
-  </p>
+  <div class="bar">
+    <p class="states" role="status">
+      <span class="state" id="s-live"><i></i><b>Connecting</b></span>
+      <span class="state" id="s-broker" hidden><i></i><span>Broker</span> <b></b></span>
+      <span class="state" id="s-module" hidden><i></i><span>Module</span> <b></b></span>
+    </p>
+    <p class="since" id="since"></p>
+  </div>
 </header>
-<p id="notice" class="notice" hidden></p>
+<div id="notice" class="notice" hidden>
+  <p id="notice-text"></p>
+  <p class="actions"><a id="open" href="http://localhost:8080/" hidden>Open the live page on this computer</a> <button id="retry" type="button" hidden>Try again</button></p>
+</div>
 <main>
   <section class="now" aria-label="Latest report">
     <p class="label" id="now-label">Latest report</p>

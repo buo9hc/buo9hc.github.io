@@ -29,10 +29,60 @@ function clock(t, date) {
 }
 const ms = (n) => (n === undefined ? "" : n < 10000 ? `${n} ms` : `${Math.round(n / 1000)} s`);
 
-function setState(id, text, ok) {
-  const e = $(id);
-  e.className = "state" + (ok === true ? " ok" : ok === false ? " no" : "");
-  e.querySelector("b").textContent = text;
+// --- status bar
+
+// kind: "ok", "no", "warn" or "" ; no text hides the entry
+function setState(id, text, kind) {
+  const e = $(id), b = e.querySelector("b");
+  e.hidden = !text;
+  e.className = "state" + (kind ? " " + kind : "");
+  if (b.textContent !== (text || "")) b.textContent = text || "";
+}
+
+function showStatus(d) {
+  setState("s-live", "Live", "ok");
+  setState("s-broker", d.broker ? "connected" : "not connected", d.broker ? "ok" : "no");
+  const m = d.broker ? d.module : null;
+  setState("s-module", m === "online" ? "online" : m === "offline" ? "offline" : d.broker ? "no message yet" : "", m === "online" ? "ok" : m === "offline" ? "no" : "");
+  if (!d.broker) notice("The app on this computer is running, but it cannot reach the MQTT broker. It keeps trying.");
+  else if (m === "offline") notice("The module is not connected to the broker. Check its power and Wi-Fi.");
+  else notice("");
+}
+
+// Why the app on this computer cannot be read, as far as the browser tells.
+const AGENT = navigator.userAgent;
+const APPLE_MOBILE = /iPhone|iPad|iPod/.test(AGENT) || (/Macintosh/.test(AGENT) && navigator.maxTouchPoints > 1);
+const MOBILE = APPLE_MOBILE || /Android/.test(AGENT);
+const SAFARI = APPLE_MOBILE || (/Safari\//.test(AGENT) && !/Chrome\/|Chromium\/|CriOS\/|FxiOS\/|Edg\//.test(AGENT));
+
+async function permission() {
+  for (const name of ["loopback-network", "local-network-access"]) {
+    try { return (await navigator.permissions.query({ name })).state; } catch { /* not known to this browser */ }
+  }
+  return "";
+}
+
+async function showUnreachable(waiting) {
+  setState("s-broker"); setState("s-module");
+  if (LOCAL) {
+    setState("s-live", "App stopped", "no");
+    notice("The app on this computer does not answer. Start it with web/run.sh." + (state.reports.length ? " The reports below are the last ones received." : ""), false, true);
+    return;
+  }
+  setState("s-live", state.sample ? "Sample data" : "Not live", "warn");
+  if (MOBILE) return notice("This is sample data. Live reports are shown only on the computer that runs the app.");
+  if (SAFARI) return notice("This is sample data. Safari does not let this site read the app on your computer. If the app is running here, open the live page directly.", true);
+  if (waiting) return notice("Your browser is asking for permission to access the local network. Allow it to see live reports, or open the live page directly.", true);
+  if ((await permission()) === "denied") return notice("This is sample data. The browser blocks this site's access to the local network. Allow it in the site settings, or open the live page directly.", true, true);
+  notice("This is sample data. The app is not running on this computer, or the browser blocks access to it. Start it with web/run.sh, then try again or open the live page directly.", true, true);
+}
+
+function showSince() {
+  const r = state.reports[state.reports.length - 1];
+  if (!r || state.sample) { $("since").textContent = ""; return; }
+  const s = Math.max(0, Math.round(Date.now() / 1000 + state.offset - r.received));
+  const ago = s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min` : s < 86400 ? `${Math.floor(s / 3600)} h` : `${Math.floor(s / 86400)} d`;
+  $("since").textContent = `Last report ${clock(r.received)}, ${ago} ago`;
 }
 
 // --- latest report
@@ -189,14 +239,25 @@ function take(list) {
   drawChart();
 }
 
+function clearLatest() {
+  document.querySelector(".weight").classList.remove("error");
+  $("weight").textContent = "-";
+  $("unit").textContent = "";
+  $("flags").replaceChildren(); $("parts").replaceChildren();
+  $("now-meta").textContent = "Waiting for the first report. Press the button on the module.";
+  $("count").textContent = "";
+}
+
 function reset() {
   state.reports = []; state.last = 0;
   $("rows").replaceChildren();
 }
 
-function notice(text) {
+function notice(text, open, retry) {
   $("notice").hidden = !text;
-  $("notice").textContent = text || "";
+  if ($("notice-text").textContent !== (text || "")) $("notice-text").textContent = text || "";
+  $("open").hidden = !open;
+  $("retry").hidden = !retry;
 }
 
 async function showSample() {
@@ -211,31 +272,41 @@ async function showSample() {
   } catch { /* nothing to show */ }
 }
 
+let timer = null;
 async function poll() {
+  clearTimeout(timer);
+  timer = null;
+  if (!LOCAL && SAFARI) { // would only be blocked
+    if (!state.reports.length) await showSample();
+    return showUnreachable();
+  }
+  const stop = new AbortController();
+  const asking = setTimeout(async () => { if (!state.reports.length) await showSample(); showUnreachable(true); }, 2500); // a permission prompt is open
+  const limit = setTimeout(() => stop.abort(), LOCAL ? 5000 : 60000);
   try {
-    const r = await fetch(`${API}/api/reports?after=${state.sample ? 0 : state.last}`, { cache: "no-store" });
+    const r = await fetch(`${API}/api/reports?after=${state.sample ? 0 : state.last}`, { cache: "no-store", signal: stop.signal });
     if (!r.ok) throw new Error(String(r.status));
     const d = await r.json();
-    if (state.sample) { reset(); state.sample = false; $("now-label").textContent = "Latest report"; drawChart(); }
-    if (d.last < state.last) { reset(); drawChart(); } // the server was restarted
+    if (state.sample) { reset(); state.sample = false; $("now-label").textContent = "Latest report"; clearLatest(); drawChart(); }
+    if (d.last < state.last) { reset(); clearLatest(); drawChart(); } // the app was restarted
     state.failures = 0;
-    setState("s-server", "connected", true);
-    setState("s-broker", d.broker ? "connected" : "not connected", d.broker);
-    setState("s-module", !d.broker ? "unknown" : d.module || "unknown", !d.broker || !d.module ? undefined : d.module === "online");
-    notice(d.broker ? "" : "The server is not connected to the MQTT broker. It keeps trying.");
+    state.offset = d.now - Date.now() / 1000;
+    showStatus(d);
     take(d.reports);
   } catch {
+    clearTimeout(asking);
     state.failures++;
-    setState("s-server", "not reachable", false);
-    setState("s-broker", "unknown"); setState("s-module", "unknown");
-    if (state.failures === 1 && !state.reports.length) await showSample();
-    notice(state.sample ? "Sample data, not live. The server on this computer is not running (web/run.sh), or the browser blocks access to it."
-      : "The server on this computer does not answer. The reports below are the last ones received.");
+    if (!LOCAL && state.failures === 1 && !state.reports.length) await showSample();
+    await showUnreachable();
   } finally {
-    setTimeout(poll, state.failures ? 4000 : 1000);
+    clearTimeout(asking);
+    clearTimeout(limit);
+    showSince();
+    timer = setTimeout(poll, state.failures ? 4000 : 1000);
   }
 }
 
+$("retry").addEventListener("click", () => { if (timer) poll(); });
 addEventListener("resize", () => drawChart());
 drawChart();
 poll();

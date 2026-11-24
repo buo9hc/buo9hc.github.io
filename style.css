@@ -22,9 +22,20 @@ p { margin: 0; }
 .states { display: flex; flex-wrap: wrap; gap: 4px 18px; color: var(--ink-2); font-size: 13px; }
 .state i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--ink-3); margin-right: 5px; }
 .state b { color: var(--ink); }
+.state[hidden] { display: none; }
+.bar { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline; }
+.since { color: var(--ink-3); font-size: 13px; font-variant-numeric: tabular-nums; }
 .state.ok i { background: var(--good); border-color: var(--good); }
 .state.no i { border-color: var(--bad); border-radius: 0; }
-.notice { margin: 14px auto 0; max-width: 1072px; padding: 9px 12px; border: 1px solid var(--warn); border-left-width: 5px; background: var(--surface); }
+.state.warn i { border-color: var(--warn); background: linear-gradient(90deg, var(--warn) 50%, transparent 50%); }
+.notice { margin: 14px auto 0; max-width: 1072px; padding: 10px 14px; border: 1px solid var(--warn); border-left-width: 5px; background: var(--surface); }
+.notice[hidden] { display: none; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 8px; }
+.actions:not(:has(> :not([hidden]))) { display: none; }
+.actions a, .actions button { font: inherit; font-size: 14px; padding: 5px 12px; border: 1px solid var(--ink-2); background: var(--surface); color: var(--ink); text-decoration: none; cursor: pointer; }
+.actions a { background: var(--ink); color: var(--surface); border-color: var(--ink); font-weight: bold; }
+.actions [hidden] { display: none; }
+.actions a:focus-visible, .actions button:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; }
 main { max-width: 1120px; margin: 0 auto; padding: 18px 24px; display: grid; gap: 18px; grid-template-columns: minmax(270px, 2fr) 3fr; }
 section { background: var(--surface); border: 1px solid var(--line); padding: 16px 18px; min-width: 0; }
 .log { grid-column: 1 / -1; }
