@@ -6,9 +6,9 @@ const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 // it has a trusted certificate (web/trust.sh), else over http, which Safari never allows.
 const HELPER = "http://localhost:8080";
 let routes = LOCAL ? [""] : ["https://localhost:8443", "http://localhost:8080"];
-const KEEP = 500, POINTS = 100;
+const KEEP = 100, POINTS = 100;
 const $ = (id) => document.getElementById(id);
-const state = { reports: [], last: 0, offset: 0, failures: 0, sample: false, helper: 0 };
+const state = { reports: [], last: 0, total: 0, offset: 0, failures: 0, sample: false, source: null, seen: 0, helper: null };
 
 function el(tag, text, cls) {
   const e = document.createElement(tag);
@@ -73,11 +73,12 @@ async function showUnreachable(waiting) {
     return;
   }
   setState("s-live", state.sample ? "Sample data" : "Not live", "warn");
-  if (MOBILE) return notice("This is sample data. Live reports are shown only on the computer that runs the app.");
-  if (SAFARI) return notice("This is sample data. If the app is running on this computer, show its live data here through a small helper window, or open the live page directly.", true, true, true);
+  const what = state.sample ? "This is sample data." : "The app on this computer does not answer; the reports below are the last ones received.";
+  if (MOBILE) return notice(what + " Live reports are shown only on the computer that runs the app.");
+  if (SAFARI) return notice(what + " If the app is running on this computer, show its live data here through a small helper window, or open the live page directly.", true, true, true);
   if (waiting) return notice("Your browser is asking for permission to access the local network. Allow it to see live reports, or open the live page directly.", true);
-  if ((await permission()) === "denied") return notice("This is sample data. The browser blocks this site's access to the local network. Allow it in the site settings, or open the live page directly.", true, true);
-  notice("This is sample data. The app is not running on this computer, or the browser blocks access to it. Start it with web/run.sh, then try again or open the live page directly.", true, true);
+  if ((await permission()) === "denied") return notice(what + " The browser blocks this site's access to the local network. Allow it in the site settings, or open the live page directly.", true, true);
+  notice(state.sample ? what + " The app is not running on this computer, or the browser blocks access to it. Start it with web/run.sh, then try again or open the live page directly." : what + " Start it with web/run.sh; the page reconnects by itself.", true, true);
 }
 
 function showSince() {
@@ -124,6 +125,7 @@ function remarks(r) {
   if (r.missing) out.push(r.missing === 1 ? "1 report lost before this one" : `${r.missing} reports lost before this one`);
   if (r.restarted) out.push("module restarted");
   if (d.late_ms !== undefined) out.push(`sent ${ms(d.late_ms)} late`);
+  if (r.queued) out.push("arrived after a pause of the app, time may be later than the press");
   if (r.unchanged) out.push("same weight as before");
   if (d.text) out.push(d.text.replace(/\n/g, " / "));
   return out.join("; ");
@@ -160,7 +162,7 @@ function addRows(list) {
   for (const r of list) body.prepend(row(r));
   while (body.rows.length > KEEP) body.deleteRow(-1);
   const bad = state.reports.filter((r) => r.data.error).length;
-  $("count").textContent = `${state.reports.length} received` + (bad ? `, ${bad} without a valid reading` : "");
+  $("count").textContent = `last ${state.reports.length}` + (bad ? `, ${bad} without a valid reading` : "");
 }
 
 // --- chart: one series, the weights in the unit of the newest reading
@@ -184,7 +186,8 @@ function drawChart() {
 
   const W = Math.max(280, box.clientWidth), H = box.clientHeight, L = 54, R = 64, T = 14, B = 28;
   const ws = pts.map((r) => r.data.weight);
-  const { ticks, digits } = niceTicks(Math.min(0, ...ws), Math.max(...ws, 0));
+  const top = Math.max(...ws, 0), low = Math.min(0, ...ws);
+  const { ticks, digits } = niceTicks(low > -top * 0.02 ? 0 : low, top); // a tiny negative reading needs no axis of its own
   const y0 = ticks[0], y1 = ticks[ticks.length - 1];
   const x = (i) => (pts.length === 1 ? (L + W - R) / 2 : L + (i * (W - L - R)) / (pts.length - 1));
   const y = (v) => T + ((y1 - v) * (H - T - B)) / (y1 - y0);
@@ -278,66 +281,214 @@ async function showSample() {
 
 function accept(d) {
   if (state.sample) { reset(); state.sample = false; $("now-label").textContent = "Latest report"; clearLatest(); drawChart(); }
-  if (d.last < state.last) { reset(); clearLatest(); drawChart(); } // the app was restarted
+  if (d.last < state.last) { reset(); clearLatest(); drawChart(); } // another database
   state.failures = 0;
+  state.seen = Date.now();
   state.offset = d.now - Date.now() / 1000;
+  state.total = d.total;
   showStatus(d);
-  take(d.reports.filter((r) => r.id > state.last));
+  const fresh = d.reports.filter((r) => r.id > state.last);
+  take(fresh);
+  showSince();
+  if (fresh.length || !db.loaded) db.refresh();
 }
 
-// Live data through the helper window, which is a page of the app itself.
+// The app pushes each report as it comes (server-sent events), either to this page directly or
+// to the helper window, which is a page of the app itself.
+let events = null;
+
+function follow(route) {
+  return new Promise((resolve) => {
+    const es = new EventSource(`${route}/api/stream?after=${state.sample ? 0 : state.last}`);
+    let open = false;
+    const asking = setTimeout(async () => { // a permission prompt is open
+      if (!state.reports.length) await showSample();
+      if (!open && !helperAlive()) showUnreachable(true);
+    }, 2500);
+    const limit = setTimeout(() => end(), LOCAL ? 6000 : 60000);
+    const end = () => {
+      clearTimeout(asking); clearTimeout(limit);
+      es.close();
+      if (events === es) { events = null; if (state.source === route) state.source = null; }
+      resolve(open);
+    };
+    es.onmessage = (e) => {
+      if (!open) { open = true; clearTimeout(asking); clearTimeout(limit); events = es; state.source = route; }
+      accept(JSON.parse(e.data));
+    };
+    es.onerror = end;
+    es.stop = end;
+  });
+}
+
+const helperAlive = () => state.helper !== null && Date.now() - state.helper.seen < 9000;
+
+async function run() {
+  for (;;) {
+    let was = false;
+    if (!helperAlive()) {
+      for (const route of routes) {
+        if (SAFARI && route.startsWith("http:")) continue; // would only be blocked
+        was = await follow(route); // returns when the connection ends
+        if (was) { routes = [route, ...routes.filter((x) => x !== route)]; break; }
+        if (helperAlive()) break;
+      }
+      if (!was && !helperAlive()) {
+        state.failures++;
+        if (!LOCAL && state.failures === 1 && !state.reports.length) await showSample();
+        await showUnreachable();
+        db.unavailable();
+      }
+    }
+    await new Promise((r) => { run.wake = r; setTimeout(r, was ? 1000 : helperAlive() ? 2000 : 4000); });
+  }
+}
+
+// The app sends something at least every 5 s; a sleeping computer or tab may hide a lost connection.
+function check() {
+  if (events && Date.now() - state.seen > 15000) events.stop();
+  if (state.source === "helper" && !helperAlive()) { state.source = null; run.wake(); }
+  showSince();
+}
+setInterval(check, 1000);
+addEventListener("visibilitychange", () => { if (!document.hidden) { if (events && Date.now() - state.seen > 7000) events.stop(); else if (!events) run.wake && run.wake(); } });
+addEventListener("online", () => run.wake && run.wake());
+
+const answers = new Map();
 addEventListener("message", (e) => {
-  if (LOCAL || e.origin !== HELPER || !e.data || !e.data.weighlink || !Array.isArray(e.data.weighlink.reports)) return;
-  state.helper = Date.now();
-  accept(e.data.weighlink);
-  showSince();
-  e.source.postMessage({ after: state.last }, HELPER);
+  if (LOCAL || e.origin !== HELPER || !e.source || !e.data) return;
+  const m = e.data, known = state.helper !== null && state.helper.window === e.source;
+  if (m.helper || m.weighlink || m.answer) {
+    if (!known) e.source.postMessage({ after: state.sample ? 0 : state.last }, HELPER); // also after a reload of this page
+    state.helper = { window: e.source, seen: Date.now() };
+  }
+  if (m.weighlink && Array.isArray(m.weighlink.reports) && (!events || state.source === "helper")) {
+    state.source = "helper";
+    accept(m.weighlink);
+  }
+  if (m.answer && answers.has(m.answer)) { answers.get(m.answer)(m); answers.delete(m.answer); }
 });
-const helped = () => Date.now() - state.helper < 8000;
 
-async function read(route, waiting) {
-  const stop = new AbortController();
-  const asking = setTimeout(waiting, 2500); // a permission prompt is open
-  const limit = setTimeout(() => stop.abort(), LOCAL ? 5000 : 60000);
-  try {
-    const r = await fetch(`${route}/api/reports?after=${state.sample ? 0 : state.last}`, { cache: "no-store", signal: stop.signal });
-    if (!r.ok) throw new Error(String(r.status));
-    return await r.json();
-  } finally {
-    clearTimeout(asking);
-    clearTimeout(limit);
+// --- database
+
+// A query to the app, over whichever way is connected.
+async function ask(path) {
+  if (state.source === "helper") {
+    const id = `${Date.now()}-${Math.random()}`;
+    const m = await new Promise((resolve, reject) => {
+      answers.set(id, resolve);
+      state.helper.window.postMessage({ id, get: path }, HELPER);
+      setTimeout(() => { if (answers.delete(id)) reject(new Error("no answer")); }, 20000);
+    });
+    if (!m.ok) throw new Error("refused");
+    return m.text;
   }
+  if (state.source === null) throw new Error("not connected");
+  const r = await fetch(state.source + path, { cache: "no-store" });
+  if (!r.ok) throw new Error(String(r.status));
+  return r.text();
 }
 
-let timer = null;
-async function poll() {
-  clearTimeout(timer);
-  timer = null;
-  let waited = false;
-  const waiting = async () => { waited = true; if (!state.reports.length) await showSample(); if (waited && !helped()) showUnreachable(true); };
-  if (!helped()) {
-    let d = null;
-    for (const route of routes) {
-      if (SAFARI && route.startsWith("http:")) continue; // would only be blocked
-      try { d = await read(route, waiting); routes = [route, ...routes.filter((x) => x !== route)]; break; } catch { /* next one */ }
-    }
-    waited = false;
-    if (helped()) { /* the helper window was faster */ } else if (d) {
-      accept(d);
-    } else {
-      state.failures++;
-      if (!LOCAL && state.failures === 1 && !state.reports.length) await showSample();
-      await showUnreachable();
-    }
-  }
-  showSince();
-  timer = setTimeout(poll, state.failures ? 4000 : 1000);
-}
+const db = {
+  loaded: 0, oldest: 0, timer: null, busy: false, again: false,
 
-$("retry").addEventListener("click", () => { if (timer) poll(); });
+  query(extra) {
+    const q = new URLSearchParams(extra);
+    for (const [id, name, plus] of [["f-from", "from", 0], ["f-to", "to", 1]]) {
+      const v = $(id).value && new Date($(id).value).getTime();
+      if (v) q.set(name, String(v / 1000 + plus)); // "to" includes that second
+    }
+    for (const n of ["event", "unit", "status", "errors"]) if ($("f-" + n).value) q.set(n, $("f-" + n).value);
+    const s = q.toString();
+    return s ? "?" + s : "";
+  },
+
+  // New reports: show them too, unless older pages are open or an end is set.
+  refresh() {
+    if (db.timer || db.loaded > 100 || (db.loaded && $("f-to").value)) return;
+    db.timer = setTimeout(() => { db.timer = null; db.search(); }, db.loaded ? 1000 : 50);
+  },
+
+  async search(more) {
+    if (db.busy) { db.again = !more; return; }
+    db.busy = true;
+    try {
+      const d = JSON.parse(await ask("/api/history" + db.query(more ? { before: db.oldest } : {})));
+      const body = $("db-rows");
+      if (!more) { body.replaceChildren(); db.loaded = 0; }
+      for (const r of d.reports) body.append(row(r));
+      db.loaded += d.reports.length;
+      if (d.reports.length) db.oldest = d.reports[d.reports.length - 1].id;
+      for (const n of ["event", "unit", "status"]) db.options($("f-" + n), d.known[n]);
+      $("db-count").textContent = `${d.count} of ${Math.max(state.total, d.count)} reports`;
+      $("db-scroll").hidden = !d.count;
+      $("more").hidden = db.loaded >= d.count;
+      $("db-note").textContent = d.count ? "" : "No reports match.";
+      $("csv").disabled = !d.count;
+      db.tiles(d.units);
+    } catch {
+      $("db-note").textContent = "The database could not be read.";
+    }
+    db.busy = false;
+    if (db.again) { db.again = false; db.search(); }
+  },
+
+  options(select, values) {
+    const have = new Set([...select.options].map((o) => o.value));
+    for (const v of values) if (!have.has(v)) { const o = el("option", v); o.value = v; select.append(o); }
+  },
+
+  tiles(units) {
+    const num = (v) => Number(v.toFixed(4)).toLocaleString("en", { maximumFractionDigits: 4 });
+    $("tiles").replaceChildren(...units.flatMap((u) => [
+      el("div", u.unit || "no unit", "tile unit"),
+      ...[["Reports", u.n], ["Total", num(u.sum)], ["Average", num(u.avg)], ["Minimum", num(u.min)], ["Maximum", num(u.max)]].map(([k, v]) => {
+        const e = el("div", null, "tile");
+        e.append(el("b", v), el("span", k));
+        return e;
+      })]));
+  },
+
+  unavailable() {
+    if (!state.sample && db.loaded) return;
+    db.loaded = 0;
+    $("db-rows").replaceChildren(); $("tiles").replaceChildren();
+    $("db-scroll").hidden = true; $("more").hidden = true; $("csv").disabled = true;
+    $("db-count").textContent = "";
+    $("db-note").textContent = "The database can be read only with live data.";
+  },
+
+  async download() {
+    $("csv").disabled = true;
+    try {
+      const url = URL.createObjectURL(new Blob([await ask("/api/export.csv" + db.query({}))], { type: "text/csv" }));
+      const a = el("a");
+      a.href = url;
+      a.download = "reports.csv";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch {
+      $("db-note").textContent = "The download failed.";
+    }
+    $("csv").disabled = false;
+  },
+};
+
+$("filter").addEventListener("submit", (e) => { e.preventDefault(); db.search(); });
+$("filter").addEventListener("reset", () => setTimeout(() => db.search(), 0));
+$("today").addEventListener("click", () => {
+  const n = new Date();
+  $("f-from").value = `${n.getFullYear()}-${two(n.getMonth() + 1)}-${two(n.getDate())}T00:00:00`;
+  $("f-to").value = "";
+  db.search();
+});
+$("more").addEventListener("click", () => db.search(true));
+$("csv").addEventListener("click", () => db.download());
+$("retry").addEventListener("click", () => run.wake && run.wake());
 $("helper").addEventListener("click", () => {
   if (!open(HELPER + "/bridge", "weighlink", "popup,width=420,height=230")) notice("The browser blocked the helper window. Allow pop-ups for this site, or open the live page directly.", true, true, true);
 });
 addEventListener("resize", () => drawChart());
 drawChart();
-poll();
+db.unavailable();
+run();

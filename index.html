@@ -37,13 +37,35 @@
     <div class="plot" id="plot"></div>
   </section>
   <section class="log" aria-label="Reports">
-    <h2>Reports <small id="count"></small></h2>
+    <h2>Latest reports <small id="count"></small></h2>
     <div class="scroll"><table>
       <thead><tr><th>Time</th><th>No.</th><th>Event</th><th class="n">Weight</th><th>Unit</th><th>State</th><th>Mode</th><th class="n">Age</th><th>Remarks</th></tr></thead>
       <tbody id="rows"></tbody>
     </table></div>
   </section>
+  <section class="db" aria-label="Database">
+    <h2>Database <small id="db-count"></small></h2>
+    <form id="filter">
+      <label>From <input type="datetime-local" id="f-from" step="1"></label>
+      <label>To <input type="datetime-local" id="f-to" step="1"></label>
+      <label>Event <select id="f-event"><option value="">all</option></select></label>
+      <label>Unit <select id="f-unit"><option value="">all</option></select></label>
+      <label>Status <select id="f-status"><option value="">all</option></select></label>
+      <label>Result <select id="f-errors"><option value="">all</option><option value="0">valid</option><option value="1">errors</option></select></label>
+      <button type="submit">Search</button>
+      <button type="button" id="today">Today</button>
+      <button type="reset">Clear</button>
+      <button type="button" id="csv">Download CSV</button>
+    </form>
+    <p class="label" id="db-note" role="status"></p>
+    <div class="tiles" id="tiles"></div>
+    <div class="scroll" id="db-scroll" hidden><table>
+      <thead><tr><th>Time</th><th>No.</th><th>Event</th><th class="n">Weight</th><th>Unit</th><th>State</th><th>Mode</th><th class="n">Age</th><th>Remarks</th></tr></thead>
+      <tbody id="db-rows"></tbody>
+    </table></div>
+    <p class="actions"><button type="button" id="more" hidden>Load more</button></p>
+  </section>
 </main>
-<footer>Reads the MQTT topic <code>home/esp32c3/scale</code>. Shows the last 500 reports since the server was started.</footer>
+<footer>Reports of the MQTT topic <code>home/esp32c3/scale</code>, saved in a database on the computer that runs the app.</footer>
 </body>
 </html>
